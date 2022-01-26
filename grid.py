@@ -70,9 +70,9 @@ class VelocityGrid:
         # stretch / transform elements
         self.dx_grid = None
         # self.stretch_grid()
-        # self.create_triple_grid(lows=np.array([self.low, -5, 12]),
-        #                         highs=np.array([-5, 12, self.high]),
-        #                         elements=np.array([8, 20, 2]))
+        self.create_triple_grid(lows=np.array([self.low, -5, 5]),
+                                highs=np.array([-5, 5, self.high]),
+                                elements=np.array([3, 14, 3]))
         if self.dx_grid is None:
             self.dx_grid = self.dx * cp.ones(self.elements)
 
@@ -94,6 +94,10 @@ class VelocityGrid:
         self.translation_matrix = cp.asarray(mid_identity +
                                              self.local_basis.translation_matrix[None, :, :] /
                                              self.J[:, None, None].get())
+
+        # create monotonic grid for plotting
+        self.monogrid = None
+        self.initialize_monogrid()
 
         # quad matrix
         # self.modes = 2.0 * np.pi / self.length * np.arange(int(2 * self.elements))  # only positive frequencies
@@ -153,6 +157,12 @@ class VelocityGrid:
     def compute_maxwellian_gradient(self, thermal_velocity, drift_velocity):
         return (-1.0 * ((self.device_arr - drift_velocity) / thermal_velocity ** 2.0) *
                 self.compute_maxwellian(thermal_velocity=thermal_velocity, drift_velocity=drift_velocity))
+
+    def initialize_monogrid(self):
+        self.monogrid = np.zeros(self.elements * (self.order - 1) + 1)
+        for i in range(self.elements):
+            self.monogrid[i*(self.order-1):(i+1)*(self.order-1)] = self.arr[i, :-1]
+        self.monogrid[-1] = self.arr[-1, -1]
 
 
 class PhaseSpace:

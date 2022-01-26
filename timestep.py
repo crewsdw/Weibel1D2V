@@ -38,6 +38,9 @@ class Stepper:
         self.inv_backward_advection = None
         self.build_advection_matrix(grid=grid)
 
+        # save-times
+        self.save_times = np.array([25, 50, 75, 100, 0])
+
     def build_advection_matrix(self, grid):
         """ Construct the global backward advection matrix """
         backward_advection_operator = (cp.eye(grid.v.order)[None, None, :, :] -
@@ -45,7 +48,7 @@ class Stepper:
                                        grid.v.translation_matrix[None, :, :, :])
         self.inv_backward_advection = cp.linalg.inv(backward_advection_operator)
 
-    def main_loop(self, distribution, static_field, dynamic_field, grid):
+    def main_loop(self, distribution, static_field, dynamic_field, grid, data_file):
         print('Beginning main loop')
         # Compute first two steps with ssp-rk3 and save fluxes
         # zero stage
@@ -73,7 +76,7 @@ class Stepper:
                                    [bz_flux1, bz_flux0]]
 
         # Main loop
-        t0 = timer.time()
+        t0, save_counter = timer.time(), 0
         for i in range(self.steps):
             previous_phase_space_fluxes, previous_dynamic_fluxes = self.adams_bashforth(
                 distribution=distribution, static_field=static_field, dynamic_field=dynamic_field, grid=grid,
@@ -91,6 +94,17 @@ class Stepper:
                 self.density_array = np.append(self.density_array, distribution.total_density(grid=grid))
                 print('\nTook 50 steps, time is {:0.3e}'.format(self.time))
                 print('Time since start is ' + str((timer.time() - t0) / 60.0) + ' minutes')
+
+            if np.abs(self.time - self.save_times[save_counter]) < 5.0e-3:
+                distribution.inverse_fourier_transform()
+                data_file.save_data(distribution=distribution.arr_nodal.get(),
+                                    density=distribution.moment0.arr_nodal.get(),
+                                    current=distribution.moment_v1.arr_nodal.get(),
+                                    electric_x=static_field.electric_x.arr_nodal.get(),
+                                    electric_y=dynamic_field.electric_y.arr_nodal.get(),
+                                    magnetic=dynamic_field.magnetic_z.arr_nodal.get(),
+                                    time=self.save_times[save_counter])
+                save_counter += 1
 
         print('\nAll done at time is {:0.3e}'.format(self.time))
         print('Total steps were ' + str(self.steps))

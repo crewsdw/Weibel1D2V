@@ -12,11 +12,13 @@ def basis_product(flux, basis_arr, axis, permutation):
 
 
 class PhaseSpaceFlux:
-    def __init__(self, resolutions, x_modes, order, charge_sign):
+    def __init__(self, resolutions, x_modes, order, charge_sign, nu):
         resolutions[0] = x_modes
         self.resolutions = resolutions
         self.order = order
         self.charge_sign = charge_sign
+        # hyperviscosity
+        self.nu = nu
 
         self.permutations = [(0, 1, 4, 2, 3),
                              (0, 1, 2, 3, 4)]
@@ -95,7 +97,8 @@ class PhaseSpaceFlux:
                                                                field=dynamic_field.magnetic_z, grid=grid)
         # Compute the distribution RHS
         return (grid.u.J[None, :, None, None, None] * self.u_flux(distribution=distribution, grid=grid) +
-                grid.v.J[None, None, None, :, None] * self.v_flux(distribution=distribution, grid=grid))
+                grid.v.J[None, None, None, :, None] * self.v_flux(distribution=distribution, grid=grid) -
+                self.nu * grid.x.device_wavenumbers_fourth[:, None, None, None, None] * distribution.arr_spectral)
 
     def semi_discrete_rhs_fully_explicit(self, distribution, static_field, dynamic_field, grid):
         """ Computes the semi-discrete equation for the transport equation """
@@ -108,30 +111,31 @@ class PhaseSpaceFlux:
                                                                field=dynamic_field.magnetic_z, grid=grid)
         # Compute the distribution RHS
         return (grid.u.J[None, :, None, None, None] * self.u_flux(distribution=distribution, grid=grid) +
-                grid.v.J[None, :, None, None, None] * self.v_flux(distribution=distribution, grid=grid) +
-                self.spectral_advection(distribution=distribution, grid=grid))
+                grid.v.J[None, None, None, :, None] * self.v_flux(distribution=distribution, grid=grid) +
+                self.spectral_advection(distribution=distribution, grid=grid) -
+                self.nu * grid.x.device_wavenumbers_fourth[:, None, None, None, None] * distribution.arr_spectral)
 
     def u_flux(self, distribution, grid):
         """ Compute the DG-projection of the u-directed flux divergence """
         # Pre-condition internal flux by the integration of the velocity coordinate
-        internal = self.charge_sign * (self.flux_ex.arr_spectral + cp.einsum('rps,mijrs->mijrp',
-                                                                             grid.v.translation_matrix,
-                                                                             self.flux_bz.arr_spectral))
-        boundary = self.charge_sign * (self.flux_ex.arr_spectral + (grid.v.device_arr[None, None, None, :, :] *
+        # flux = self.charge_sign * (self.flux_ex.arr_spectral + cp.einsum('rps,mijrs->mijrp',
+        #                                                                      grid.v.translation_matrix,
+        #                                                                      self.flux_bz.arr_spectral))
+        flux = self.charge_sign * (self.flux_ex.arr_spectral + (grid.v.device_arr[None, None, None, :, :] *
                                                                     self.flux_bz.arr_spectral))
-        return (basis_product(flux=internal, basis_arr=grid.u.local_basis.internal,
+        return (basis_product(flux=flux, basis_arr=grid.u.local_basis.internal,
                               axis=2, permutation=self.permutations[0]) -
-                self.numerical_flux(distribution=distribution, flux=boundary, grid=grid, dim=0))
+                self.numerical_flux(distribution=distribution, flux=flux, grid=grid, dim=0))
 
     def v_flux(self, distribution, grid):
-        internal = self.charge_sign * (self.flux_ey.arr_spectral - cp.einsum('ijk,mikrs->mijrs',
-                                                                             grid.u.translation_matrix,
-                                                                             self.flux_bz.arr_spectral))
-        boundary = self.charge_sign * (self.flux_ey.arr_spectral - (grid.u.device_arr[None, :, :, None, None] *
+        # flux = self.charge_sign * (self.flux_ey.arr_spectral - cp.einsum('ijk,mikrs->mijrs',
+        #                                                                  grid.u.translation_matrix,
+        #                                                                  self.flux_bz.arr_spectral))
+        flux = self.charge_sign * (self.flux_ey.arr_spectral - (grid.u.device_arr[None, :, :, None, None] *
                                                                     self.flux_bz.arr_spectral))
-        return (basis_product(flux=internal, basis_arr=grid.v.local_basis.internal,
+        return (basis_product(flux=flux, basis_arr=grid.v.local_basis.internal,
                               axis=4, permutation=self.permutations[1]) -
-                self.numerical_flux(distribution=distribution, flux=boundary, grid=grid, dim=1))
+                self.numerical_flux(distribution=distribution, flux=flux, grid=grid, dim=1))
 
     def numerical_flux(self, distribution, flux, grid, dim):
         # Allocate

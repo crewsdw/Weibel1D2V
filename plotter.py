@@ -11,8 +11,10 @@ class Plotter:
         # Build structured grid, nodal
         self.U, self.V = np.meshgrid(grid.u.arr.flatten(), grid.v.arr.flatten(), indexing='ij')
         self.x = grid.x.arr
-        self.k = grid.x.wavenumbers / grid.x.fundamental
+        self.k = grid.x.wavenumbers  # / grid.x.fundamental
         self.length = grid.x.length
+        # monotonic grids
+        self.Umono, self.Vmono = np.meshgrid(grid.u.monogrid, grid.v.monogrid, indexing='ij')
 
     def spatial_scalar_plot(self, scalar, y_axis, spectrum=True):
         if scalar.arr_nodal is None:
@@ -29,8 +31,16 @@ class Plotter:
             # plt.plot(self.k.flatten(), np.real(spectrum), 'ro', label='real')
             # plt.plot(self.k.flatten(), np.imag(spectrum), 'go', label='imaginary')
             plt.semilogy(self.k.flatten(), np.log(1+np.abs(spectrum)), 'o')
-            plt.xlabel('Modes'), plt.ylabel(y_axis + ' spectrum')
-            plt.grid(True), plt.legend(loc='best'), plt.tight_layout()
+            plt.xlabel(r'Wavenumber $k\lambda_D$'), plt.ylabel(y_axis + ' spectrum')
+            plt.grid(True), plt.tight_layout()  # plt.legend(loc='best')
+
+    def plot_many_scalars(self, times, scalars, y_axis, save_name):
+        plt.figure()
+        for idx in range(scalars.shape[0]):
+            plt.plot(self.x, scalars[idx, :], linewidth=3, label='t={:0.0f}'.format(times[idx]))
+        plt.xlabel(r'Position $x/\lambda_D$'), plt.ylabel(y_axis), plt.legend(loc='best')
+        plt.grid(True), plt.tight_layout()
+        plt.savefig(save_name + '.pdf')
 
     def velocity_contourf(self, dist_slice):
         arr = np.real(dist_slice.reshape(self.U.shape[0], self.U.shape[1]).get())
@@ -49,11 +59,32 @@ class Plotter:
         cb_i = np.linspace(np.amin(arr_i), np.amax(arr_i), num=100)
 
         fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-        cm = ax[0].contourf(self.U, self.V, arr_r, cb_r)
+        # cm = ax[0].contourf(self.U, self.V, arr_r, cb_r)
+        cm = ax[0].pcolormesh(self.U, self.V, arr_r, shading='gouraud', vmin=cb_r[0], vmax=cb_r[-1], rasterized=True)
         fig.colorbar(cm, ax=ax[0])
         ax[0].set_xlabel('u'), ax[0].set_ylabel('v'), ax[0].set_title('Real')  # , ax[0].colorbar()
-        cm = ax[1].contourf(self.U, self.V, arr_i, cb_i)
+        # cm = ax[1].contourf(self.U, self.V, arr_i, cb_i)
+        cm = ax[1].pcolormesh(self.U, self.V, arr_i, shading='gouraud', vmin=cb_i[0], vmax=cb_i[-1], rasterized=True)
         ax[1].set_xlabel('u'), ax[1].set_ylabel('v'), ax[1].set_title('Imag')  # , ax[1].colorbar()
+        fig.colorbar(cm, ax=ax[1])
+
+        plt.suptitle(title), plt.tight_layout()
+
+    def mode_plot_monotonic_grids(self, distribution, mode_idx, title='Mode 0'):
+        averaged_distribution = distribution.average_corners_spectral()
+        arr_r = np.real(averaged_distribution[mode_idx, :, :])
+        arr_i = np.imag(averaged_distribution[mode_idx, :, :])
+        # arr_i[0, 0] += 1.0e-15
+
+        cb_r = np.linspace(np.amin(arr_r), np.amax(arr_r), num=100)
+        cb_i = np.linspace(np.amin(arr_i), np.amax(arr_i), num=100)
+
+        fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+        cm = ax[0].pcolormesh(self.Umono, self.Vmono, arr_r, shading='gouraud', vmin=cb_r[0], vmax=cb_r[-1], rasterized=True)
+        fig.colorbar(cm, ax=ax[0])
+        ax[0].set_xlabel('u'), ax[0].set_ylabel('v'), ax[0].set_title('Real')
+        cm = ax[1].pcolormesh(self.Umono, self.Vmono, arr_i, shading='gouraud', vmin=cb_i[0], vmax=cb_i[-1], rasterized=True)
+        ax[1].set_xlabel('u'), ax[1].set_ylabel('v'), ax[1].set_title('Imag')
         fig.colorbar(cm, ax=ax[1])
 
         plt.suptitle(title), plt.tight_layout()
@@ -88,44 +119,57 @@ class Plotter3D:
 
     def __init__(self, grid):
         # Build structured grid, full space
+        # (ix, iu, iv) = (cp.ones(grid.x.elements+1),
+        #                 cp.ones(grid.u.elements * grid.u.order),
+        #                 cp.ones(grid.v.elements * grid.v.order))
+        # modified_x = 0.1 * cp.append(grid.x.device_arr, grid.x.device_arr[-1] + grid.x.dx)
+        # (x3, u3, v3) = (outer3(a=modified_x, b=iu, c=iv),
+        #                 outer3(a=ix, b=grid.u.device_arr.flatten(), c=iv),
+        #                 outer3(a=ix, b=iu, c=grid.v.device_arr.flatten()))
+        # self.grid = pv.StructuredGrid(x3, u3, v3)
+        # Build structured grid, monotonic grid space
         (ix, iu, iv) = (cp.ones(grid.x.elements+1),
-                        cp.ones(grid.u.elements * grid.u.order),
-                        cp.ones(grid.v.elements * grid.v.order))
-        modified_x = 0.1 * cp.append(grid.x.device_arr, grid.x.device_arr[-1] + grid.x.dx)
+                        cp.ones(grid.u.elements * (grid.u.order-1) + 1),
+                        cp.ones(grid.v.elements * (grid.v.order-1) + 1))
+        modified_x = 0.25 * cp.append(grid.x.device_arr, grid.x.device_arr[-1] + grid.x.dx)
         (x3, u3, v3) = (outer3(a=modified_x, b=iu, c=iv),
-                        outer3(a=ix, b=grid.u.device_arr.flatten(), c=iv),
-                        outer3(a=ix, b=iu, c=grid.v.device_arr.flatten()))
+                        outer3(a=ix, b=cp.asarray(grid.u.monogrid), c=iv),
+                        outer3(a=ix, b=iu, c=cp.asarray(grid.v.monogrid)))
         self.grid = pv.StructuredGrid(x3, u3, v3)
 
         # build structured grid, spectral space
-        ix2 = cp.ones(grid.x.modes)
-        u3_2, v3_2 = (outer3(a=ix2, b=grid.u.device_arr.flatten(), c=iv),
-                      outer3(a=ix2, b=iu, c=grid.v.device_arr.flatten()))
-        k3 = outer3(a=grid.x.device_wavenumbers, b=iu, c=iv)
-        self.spectral_grid = pv.StructuredGrid(k3, u3_2, v3_2)
+        # ix2 = cp.ones(grid.x.modes)
+        # u3_2, v3_2 = (outer3(a=ix2, b=grid.u.device_arr.flatten(), c=iv),
+        #               outer3(a=ix2, b=iu, c=grid.v.device_arr.flatten()))
+        # k3 = outer3(a=grid.x.device_wavenumbers, b=iu, c=iv)
+        # self.spectral_grid = pv.StructuredGrid(k3, u3_2, v3_2)
 
     def distribution_contours3d(self, distribution, contours, remove_average=False):
         """
         plot contours of a scalar function f=f(x,y,z) on Plotter3D's grid
         """
         if remove_average:
-            distribution.fourier_transform()
+            # distribution.fourier_transform()
             distribution.arr_spectral[0, :, :, :, :] = 0
             distribution.inverse_fourier_transform()
 
-        new_dist = np.zeros((distribution.resolutions[0]+1, distribution.resolutions[1], distribution.order,
-                             distribution.resolutions[2], distribution.order))
+        print(distribution.arr_nodal.shape)
+
+        mono_distribution = distribution.average_corners_nodal()
+        print(mono_distribution.shape)
+        new_dist = np.zeros((mono_distribution.shape[0]+1, mono_distribution.shape[1], mono_distribution.shape[2]))
         # append periodicity
-        new_dist[:-1, :, :, :, :] = distribution.arr_nodal.get()
-        new_dist[-1, :, :, :, :] = distribution.arr_nodal[0, :, :, :, :].get()
+        new_dist[:-1, :, :] = mono_distribution
+        new_dist[-1, :, :] = mono_distribution[0, :, :]
+        # set grid nodes
+        self.grid['.'] = new_dist.transpose().flatten()
 
-        self.grid['.'] = new_dist.reshape((new_dist.shape[0], new_dist.shape[1]*new_dist.shape[2],
-                                           new_dist.shape[3]*new_dist.shape[4])).transpose().flatten()
-
+        # set plot contours
         plot_contours = [0.1]
         if contours == 'adaptive':
-            cb = np.linspace(cp.amin(distribution.arr_nodal), cp.amax(distribution.arr_nodal), num=20).tolist()
-            plot_contours = self.grid.contour(cb)
+            cb = np.linspace(np.amin(new_dist), np.amax(new_dist), num=20).tolist()
+            cb_sparse = [cb[5], cb[-5]]
+            plot_contours = self.grid.contour(cb_sparse)
 
         # Create plot
         p = pv.Plotter()

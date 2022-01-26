@@ -67,6 +67,37 @@ class Distribution:
         return self.arr_spectral.reshape(self.arr_spectral.shape[0],
                                          self.resolutions[1] * self.order, self.resolutions[2] * self.order)
 
+    def average_corners_spectral(self):
+        averaged_arr = self.arr_spectral[:, :, :-1, :, :-1]
+        averaged_arr[:, :, 0, :, :], averaged_arr[:, :, :, :, 0] = (
+            (self.arr_spectral[:, :, 0, :, :-1] + cp.roll(self.arr_spectral, shift=+1, axis=1)[:, :, -1, :, :-1]) / 2,
+            (self.arr_spectral[:, :, :-1, :, 0] + cp.roll(self.arr_spectral, shift=+1, axis=3)[:, :, :-1, :, -1]) / 2)
+        new_averaged_arr = cp.zeros((self.arr_spectral.shape[0], self.arr_spectral.shape[1] * (self.arr_spectral.shape[2]-1)+1,
+                                     self.arr_spectral.shape[3] * (self.arr_spectral.shape[4]-1) + 1)) + 0j
+        new_averaged_arr[:, :-1, :-1] = averaged_arr.reshape(averaged_arr.shape[0],
+                                                             averaged_arr.shape[1]*averaged_arr.shape[2],
+                                                             averaged_arr.shape[3]*averaged_arr.shape[4])
+        new_averaged_arr[:, :-1, -1] = self.arr_spectral[:, :, :-1, -1, -1].reshape(new_averaged_arr[:, :-1, -1].shape)
+        new_averaged_arr[:, -1, :-1] = self.arr_spectral[:, -1, -1, :, :-1].reshape(new_averaged_arr[:, -1, :-1].shape)
+        new_averaged_arr[:, -1, -1] = self.arr_spectral[:, -1, -1, -1, -1]
+        return new_averaged_arr.get()
+
+    def average_corners_nodal(self):
+        averaged_arr = self.arr_nodal[:, :, :-1, :, :-1]
+        averaged_arr[:, :, 0, :, :], averaged_arr[:, :, :, :, 0] = (
+            (self.arr_nodal[:, :, 0, :, :-1] + cp.roll(self.arr_nodal, shift=+1, axis=1)[:, :, -1, :, :-1]) / 2,
+            (self.arr_nodal[:, :, :-1, :, 0] + cp.roll(self.arr_nodal, shift=+1, axis=3)[:, :, :-1, :, -1]) / 2)
+        new_averaged_arr = cp.zeros((self.arr_nodal.shape[0],
+                                     self.arr_nodal.shape[1] * (self.arr_nodal.shape[2] - 1) + 1,
+                                     self.arr_nodal.shape[3] * (self.arr_nodal.shape[4] - 1) + 1))
+        new_averaged_arr[:, :-1, :-1] = averaged_arr.reshape(averaged_arr.shape[0],
+                                                             averaged_arr.shape[1]*averaged_arr.shape[2],
+                                                             averaged_arr.shape[3]*averaged_arr.shape[4])
+        new_averaged_arr[:, :-1, -1] = self.arr_nodal[:, :, :-1, -1, -1].reshape(new_averaged_arr[:, :-1, -1].shape)
+        new_averaged_arr[:, -1, :-1] = self.arr_nodal[:, -1, -1, :, :-1].reshape(new_averaged_arr[:, -1, :-1].shape)
+        new_averaged_arr[:, -1, -1] = self.arr_nodal[:, -1, -1, -1, -1]
+        return new_averaged_arr.get()
+
     def initialize(self, grid, eigenvalue):
         """ Initialize a distribution of transverse beams """
         # grid-likes
@@ -77,9 +108,10 @@ class Distribution:
                        cp.exp(-(grid.v.device_arr + 1) ** 2.0 / 2)) / cp.sqrt(2 * cp.pi)
         # equilibrium distribution
         self.arr_nodal = cp.tensordot(ix, cp.tensordot(max_u, max_v, axes=0), axes=0)
-        # perturbation# 1.54j) # 0.736j
         self.arr_nodal += self.kinetic_eigenmode(grid=grid, amplitude=1.0e-3, wavenumber=0.1, eigenvalue=eigenvalue)
         self.fourier_transform()
+        self.compute_zero_moment(grid=grid)
+        self.compute_moment_v1(grid=grid)
 
     def kinetic_eigenmode(self, grid, amplitude, wavenumber, eigenvalue):
         """ The eigenvalue is a complex phase velocity """

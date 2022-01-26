@@ -18,12 +18,22 @@ def electrostatic_dispersion(k, z, vb):
 
 def dispersion_function(k, z, vb):
     """
-    Computes two-species plasma dispersion function epsilon(zeta, k) = 0
+    Computes plasma dispersion function epsilon_perp(k, zeta) = 0 for two beams
     """
     k_sq = k ** 2.0
     z_e = z / sq2
 
     return 1 - (z * vt_c) ** 2.0 + (1 + 0.5 * (1 + vb ** 2.0) * pd.Zprime(z_e)) / k_sq * (vt_c ** 2.0)
+
+
+def dispersion_function_aniso(k, z, vty_vtx):
+    """
+    Computes plasma dispersion function epsilon_perp(k, zeta) = 0 for anisotropic maxwellian
+    """
+    k_sq = k ** 2.0
+    z_e = z / sq2
+
+    return 1 - (z * vt_c) ** 2.0 + (1 + 0.5 * (vty_vtx ** 2.0) * pd.Zprime(z_e)) / k_sq * (vt_c ** 2.0)
 
 
 def analytic_jacobian(k, z, vb):
@@ -54,18 +64,18 @@ z = np.tensordot(zr, np.ones_like(zi), axes=0) + 1.0j * np.tensordot(np.ones_lik
 ZR, ZI = np.meshgrid(zr, zi, indexing='ij')
 
 wavenumber = 0.1
-mu = dispersion_function(wavenumber, z, 1)
-ep = electrostatic_dispersion(wavenumber, z, 1)
+mu = dispersion_function_aniso(wavenumber, z, 3)
+# ep = electrostatic_dispersion(wavenumber, z, 1)
 
 solution = opt.root(dispersion_fsolve, x0=np.array([0, 0.5]),
                     args=(wavenumber, 1), jac=jacobian_fsolve, tol=1.0e-15)
 print(solution.x[1])
 
-plt.figure()
-plt.contour(ZR, ZI, np.real(ep), 0, colors='r', linewidths=3)
-plt.contour(ZR, ZI, np.imag(ep), 0, colors='g', linewidths=3)
-plt.xlabel('Real phase velocity'), plt.ylabel('Imaginary phase velocity')
-plt.grid(True), plt.title('Static, longitudinal'), plt.tight_layout()
+# plt.figure()
+# plt.contour(ZR, ZI, np.real(ep), 0, colors='r', linewidths=3)
+# plt.contour(ZR, ZI, np.imag(ep), 0, colors='g', linewidths=3)
+# plt.xlabel('Real phase velocity'), plt.ylabel('Imaginary phase velocity')
+# plt.grid(True), plt.title('Static, longitudinal'), plt.tight_layout()
 
 plt.figure()
 plt.contour(ZR, ZI, np.real(mu), 0, colors='r', linewidths=3)
