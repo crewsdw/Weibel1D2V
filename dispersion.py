@@ -26,6 +26,13 @@ def dispersion_function(k, z, vb):
     return 1 - (z * vt_c) ** 2.0 + (1 + 0.5 * (1 + vb ** 2.0) * pd.Zprime(z_e)) / k_sq * (vt_c ** 2.0)
 
 
+def analytic_jacobian(k, z, vb):
+    k_sq = k ** 2.0
+    z_e = z / sq2
+
+    return (-2.0 * z + 0.5 * (1 + vb ** 2.0) * pd.Zdoubleprime(z_e) / k_sq) * (vt_c ** 2.0)
+
+
 def dispersion_function_aniso(k, z, vty_vtx):
     """
     Computes plasma dispersion function epsilon_perp(k, zeta) = 0 for anisotropic maxwellian
@@ -36,22 +43,22 @@ def dispersion_function_aniso(k, z, vty_vtx):
     return 1 - (z * vt_c) ** 2.0 + (1 + 0.5 * (vty_vtx ** 2.0) * pd.Zprime(z_e)) / k_sq * (vt_c ** 2.0)
 
 
-def analytic_jacobian(k, z, vb):
+def analytic_jacobian_aniso(k, z, vty_vtx):
     k_sq = k ** 2.0
     z_e = z / sq2
 
-    return (2.0 * z + 0.5 * (1 + vb ** 2.0) * pd.Zdoubleprime(z_e) / k_sq) * (vt_c ** 2.0)
+    return (-2.0 * z + 0.5 * (vty_vtx ** 2.0) * pd.Zdoubleprime(z_e) / k_sq) * (vt_c ** 2.0)
 
 
 def dispersion_fsolve(z, k, vb):
     complex_z = z[0] + 1j * z[1]
-    d = dispersion_function(k, complex_z, vb)
+    d = dispersion_function_aniso(k, complex_z, vb)
     return [np.real(d), np.imag(d)]
 
 
 def jacobian_fsolve(z, k, vb):
     complex_z = z[0] + 1j * z[1]
-    jac = analytic_jacobian(k, complex_z, vb)
+    jac = analytic_jacobian_aniso(k, complex_z, vb)
     jr, ji = np.real(jac), np.imag(jac)
     return [[jr, -ji], [ji, jr]]
 
@@ -64,8 +71,8 @@ z = np.tensordot(zr, np.ones_like(zi), axes=0) + 1.0j * np.tensordot(np.ones_lik
 ZR, ZI = np.meshgrid(zr, zi, indexing='ij')
 
 wavenumber = 0.1
-mu = dispersion_function_aniso(wavenumber, z, 3)
-# ep = electrostatic_dispersion(wavenumber, z, 1)
+mu = dispersion_function_aniso(wavenumber, z, 2)
+ep = electrostatic_dispersion(wavenumber, z, 1)
 
 solution = opt.root(dispersion_fsolve, x0=np.array([0, 0.5]),
                     args=(wavenumber, 1), jac=jacobian_fsolve, tol=1.0e-15)
@@ -86,26 +93,26 @@ plt.grid(True), plt.title('Dynamic, transverse'), plt.tight_layout()
 plt.show()
 
 # Obtain some solutions
-k = np.linspace(0.001, np.pi, num=12000)
+k = np.linspace(0.001, 1, num=1000)
 sols = np.zeros_like(k) + 0j
 guess_r, guess_i = 0.1, 0.612
 for idx, wave in enumerate(k):
     guess_r += 2e-1
     solution = opt.root(dispersion_fsolve, x0=np.array([guess_r, guess_i]),
-                        args=(wave, 1), jac=jacobian_fsolve, tol=1.0e-10)
+                        args=(wave, 3), jac=jacobian_fsolve, tol=1.0e-10)
     guess_r, guess_i = solution.x
     sols[idx] = (guess_r + 1j * guess_i)
 
-skin_depth_single_beam = 0.3 / np.sqrt(2)
+skin_depth = 0.3 * np.sqrt(8)
 
 plt.figure()
 plt.plot(k, np.real(sols), 'r', linewidth=3, label='Real')
 plt.plot(k, np.imag(sols), 'g', linewidth=3, label='Imaginary')
 plt.plot(k, 10 / 3 * np.ones_like(k), 'k--', label='Lightspeed', linewidth=3)
-plt.plot([skin_depth_single_beam, skin_depth_single_beam], [0, 10 / 3], 'b--', linewidth=1,
-         label='Individual skin depth')
+plt.plot([skin_depth, skin_depth], [0, 10 / 3], 'b--', linewidth=1,
+         label=r'$0.3\times\sqrt{8}$')
 plt.xlabel(r'Wavenumber $k\lambda_D$'), plt.ylabel(r'Phase velocity $\zeta / v_t$')
-plt.title(r'Weibel instability | Beam $v_b/c = 0.3$, Thermal $v_t/c = 0.3$')
+plt.title(r'Anisotropic Maxwellian, $v_{tx}/c = 0.3$, Thermal $v_{ty}/v_{tx} = 3$')
 plt.grid(True), plt.legend(loc='best'), plt.tight_layout()
 
 # plt.figure()
