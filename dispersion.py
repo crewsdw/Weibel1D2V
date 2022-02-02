@@ -75,7 +75,7 @@ mu = dispersion_function_aniso(wavenumber, z, 2)
 ep = electrostatic_dispersion(wavenumber, z, 1)
 
 solution = opt.root(dispersion_fsolve, x0=np.array([0, 0.5]),
-                    args=(wavenumber, 1), jac=jacobian_fsolve, tol=1.0e-15)
+                    args=(wavenumber, 2), jac=jacobian_fsolve, tol=1.0e-15)
 print(solution.x[1])
 
 # plt.figure()

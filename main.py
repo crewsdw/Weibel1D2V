@@ -8,19 +8,20 @@ import timestep as ts
 import data
 
 # Geometry and grid parameters
-elements, order = [64, 10, 10], 4
+elements, order = [100, 22, 22], 12
 
 # Grid
 wavenumber = 0.1
-eigenvalue = 0.508395013107024j
+# eigenvalue = 0.508395013107024j  # two-beam eigenvalue
+eigenvalue = 1.2304096367176165j  # anisotropic maxwellian eigenvalue
 length = 2.0 * np.pi / wavenumber
-lows = np.array([-length/2, -12, -12])
-highs = np.array([length/2, 12, 12])
+lows = np.array([-length/2, -15, -15])
+highs = np.array([length/2, 15, 15])
 grid = g.PhaseSpace(lows=lows, highs=highs, elements=elements, order=order, charge_sign=-1.0)
 
 # Variables: distribution
 distribution = var.Distribution(resolutions=elements, order=order)
-distribution.initialize(grid=grid, eigenvalue=eigenvalue)
+distribution.initialize_anisotropic_maxwellian(grid=grid, eigenvalue=eigenvalue)
 # static and dynamic fields
 static_fields = fields.Static(resolution=elements[0])
 static_fields.gauss(distribution=distribution, grid=grid)
@@ -42,7 +43,7 @@ plotter.show()
 #                               option='imag')
 
 # Set up fluxes
-nu = 1.0e-1 * 0
+nu = 1.0e-1
 phase_space_flux = fluxes.PhaseSpaceFlux(resolutions=elements, x_modes=grid.x.modes,
                                          order=order, charge_sign=-1.0, nu=nu)
 
@@ -52,11 +53,11 @@ space_flux = fluxes.SpaceFlux(resolution=elements[0], c=1/0.3)
 
 # Set time-stepper
 dt = 2.0e-3
-final_time = 5
+final_time = 101
 steps = int(np.abs(final_time // dt))
 
 # Save data
-DataFile = data.Data(folder='two_stream\\', filename='test_jan26_growth_rate')
+DataFile = data.Data(folder='two_stream\\', filename='test_jan27_anisotropic')
 DataFile.create_file(distribution=distribution.arr_nodal.get(),
                      density=distribution.moment0.arr_nodal.get(), current=distribution.moment_v1.arr_nodal.get(),
                      electric_x=static_fields.electric_x.arr_nodal.get(),

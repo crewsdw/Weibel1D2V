@@ -39,7 +39,7 @@ class Stepper:
         self.build_advection_matrix(grid=grid)
 
         # save-times
-        self.save_times = np.array([25, 50, 75, 100, 0])
+        self.save_times = np.array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 0])
 
     def build_advection_matrix(self, grid):
         """ Construct the global backward advection matrix """

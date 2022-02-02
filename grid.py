@@ -70,9 +70,9 @@ class VelocityGrid:
         # stretch / transform elements
         self.dx_grid = None
         # self.stretch_grid()
-        self.create_triple_grid(lows=np.array([self.low, -5, 5]),
-                                highs=np.array([-5, 5, self.high]),
-                                elements=np.array([3, 14, 3]))
+        self.create_triple_grid(lows=np.array([self.low, -7, 7]),
+                                highs=np.array([-7, 7, self.high]),
+                                elements=np.array([4, 14, 4]))
         if self.dx_grid is None:
             self.dx_grid = self.dx * cp.ones(self.elements)
 

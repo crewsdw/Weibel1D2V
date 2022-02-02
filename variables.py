@@ -98,7 +98,40 @@ class Distribution:
         new_averaged_arr[:, -1, -1] = self.arr_nodal[:, -1, -1, -1, -1]
         return new_averaged_arr.get()
 
-    def initialize(self, grid, eigenvalue):
+    def initialize_anisotropic_maxwellian(self, grid, eigenvalue):
+        """ Initialize an anisotropic maxwellian """
+        # grid-likes
+        ix, iu, iv = cp.ones_like(grid.x.device_arr), cp.ones_like(grid.u.device_arr), cp.ones_like(grid.v.device_arr)
+        # maxwellians
+        max_u = cp.exp(-grid.u.device_arr ** 2.0 / 2) / cp.sqrt(2 * cp.pi)
+        max_v = cp.exp(-grid.v.device_arr ** 2.0 / (2 * (2**2))) / cp.sqrt(2 * cp.pi * (2 ** 2))
+        # equilibrium distribution
+        self.arr_nodal = cp.tensordot(ix, cp.tensordot(max_u, max_v, axes=0), axes=0)
+        self.arr_nodal += self.kinetic_eigenmode_anisotropic_maxwellian(grid=grid, amplitude=1.0e-3,
+                                                                        wavenumber=0.1, eigenvalue=eigenvalue)
+        self.fourier_transform()
+        self.compute_zero_moment(grid=grid)
+        self.compute_moment_v1(grid=grid)
+
+    def kinetic_eigenmode_anisotropic_maxwellian(self, grid, amplitude, wavenumber, eigenvalue):
+        """ The eigenvalue is a complex phase velocity """
+        # maxwellians
+        max_u = cp.exp(-grid.u.device_arr ** 2.0 / 2) / cp.sqrt(2.0 * cp.pi)
+        max_v = cp.exp(-grid.v.device_arr ** 2.0 / (2 * (2**2))) / cp.sqrt(2 * cp.pi * (2 ** 2))
+        # gradients
+        dfu_du = -grid.u.device_arr * cp.exp(-grid.u.device_arr ** 2.0 / 2) / cp.sqrt(2 * cp.pi)
+        dfv_dv = -grid.v.device_arr / (2**2) * (cp.exp(-grid.v.device_arr ** 2.0 / (2 * (2**2))) /
+                                                cp.sqrt(2 * cp.pi * (2 ** 2)))
+        df_du = cp.tensordot(dfu_du, max_v, axes=0) + 0j
+        df_dv = cp.tensordot(max_u, dfv_dv, axes=0) + 0j
+        # perturbation
+        mode = 1j * (amplitude / wavenumber) * (
+                (grid.v.device_arr[None, None, :, :] / (eigenvalue - grid.u.device_arr[:, :, None, None])) * df_du +
+                df_dv
+        )
+        return cp.real(cp.tensordot(cp.exp(1j * wavenumber * grid.x.device_arr), mode, axes=0))
+
+    def initialize_two_beam(self, grid, eigenvalue):
         """ Initialize a distribution of transverse beams """
         # grid-likes
         ix, iu, iv = cp.ones_like(grid.x.device_arr), cp.ones_like(grid.u.device_arr), cp.ones_like(grid.v.device_arr)
@@ -108,12 +141,13 @@ class Distribution:
                        cp.exp(-(grid.v.device_arr + 1) ** 2.0 / 2)) / cp.sqrt(2 * cp.pi)
         # equilibrium distribution
         self.arr_nodal = cp.tensordot(ix, cp.tensordot(max_u, max_v, axes=0), axes=0)
-        self.arr_nodal += self.kinetic_eigenmode(grid=grid, amplitude=1.0e-3, wavenumber=0.1, eigenvalue=eigenvalue)
+        self.arr_nodal += self.kinetic_eigenmode_two_beam(grid=grid, amplitude=1.0e-3,
+                                                          wavenumber=0.1, eigenvalue=eigenvalue)
         self.fourier_transform()
         self.compute_zero_moment(grid=grid)
         self.compute_moment_v1(grid=grid)
 
-    def kinetic_eigenmode(self, grid, amplitude, wavenumber, eigenvalue):
+    def kinetic_eigenmode_two_beam(self, grid, amplitude, wavenumber, eigenvalue):
         """ The eigenvalue is a complex phase velocity """
         # maxwellians
         max_u = cp.exp(-grid.u.device_arr ** 2.0 / 2) / cp.sqrt(2.0 * cp.pi)
