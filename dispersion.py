@@ -70,7 +70,7 @@ z = np.tensordot(zr, np.ones_like(zi), axes=0) + 1.0j * np.tensordot(np.ones_lik
 
 ZR, ZI = np.meshgrid(zr, zi, indexing='ij')
 
-wavenumber = 0.1
+wavenumber = 0.35
 mu = dispersion_function_aniso(wavenumber, z, 2)
 ep = electrostatic_dispersion(wavenumber, z, 1)
 

@@ -57,7 +57,7 @@ final_time = 101
 steps = int(np.abs(final_time // dt))
 
 # Save data
-DataFile = data.Data(folder='two_stream\\', filename='test_jan27_anisotropic')
+DataFile = data.Data(folder='two_stream\\', filename='april11_anisotropic')
 DataFile.create_file(distribution=distribution.arr_nodal.get(),
                      density=distribution.moment0.arr_nodal.get(), current=distribution.moment_v1.arr_nodal.get(),
                      electric_x=static_fields.electric_x.arr_nodal.get(),
